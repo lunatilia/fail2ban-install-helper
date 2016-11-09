@@ -1,0 +1,197 @@
+#!/bin/sh
+########################################################################
+# Script Name   : fail2ban-install-helper
+# Author        : Mitsuki Shirase
+# Created       : November 9th 2016
+# Last Modified : 
+# Description   : fail2ban install helper for OpenBSD 6.0
+######################################################################## 
+
+readonly DEF_PROGRAM_NAME="fail2ban install helper for OpenBSD 6.0"
+readonly DEF_MAJOR_VER="0"
+readonly DEF_MINOR_VER="0"
+readonly DEF_REV="1"
+
+readonly cmd_git="/usr/local/bin/git"
+readonly cmd_python="/usr/local/bin/python2.7"
+readonly f2b_github="https://github.com/fail2ban/fail2ban.git"
+
+
+do_clone_f2b() {
+    local ret
+    ${cmd_git} clone -b master ${f2b_github}
+    ret=$?
+    if [ ${ret} -ne 0 ]; then
+        /bin/echo "clone failed."; exit 1
+    fi
+}
+
+do_install_f2b() {
+    local ret
+    local setupdir=fail2ban
+    local command="setup.py"
+    local command_flags="install"
+
+    cd ${setupdir}
+    ${cmd_python} ${command} ${command_flags}
+    ret=$?
+    if [ ${ret} -ne 0 ]; then
+        /bin/echo "fail2ban install failed."; exit 1
+    fi
+}
+
+set_f2b_config() {
+    /bin/cat <<\EOF > /etc/fail2ban/jail.d/sshd-pf.conf
+[DEFAULT]
+
+banaction = pf
+
+
+[sshd-pf]
+
+enabled  = true
+filter   = sshd
+action   = pf[name=SSH, port=22, protocol=tcp]
+logpath  = /var/log/authlog
+maxretry = 3
+
+
+[recidive]
+
+enabled  = true
+filter   = recidive
+logpath  = /var/log/fail2ban.log
+action   = pf[name=recidive,protocol=all]
+bantime  = 604800  ; 1 week
+findtime = 86300   ; 1 day
+maxretry = 3
+EOF
+}
+
+set_pf_config() {
+    local pfconf=/etc/pf.conf
+    cp -p ${pfconf} ${pfconf}.bak
+    /bin/cat <<\EOF >> /etc/pf.conf
+
+# include pf settings for fail2ban
+include "/etc/pf-f2b-sshd.conf"
+EOF
+
+    /bin/cat <<\EOF > /etc/pf-f2b-sshd.conf
+# pf settings for fail2ban
+table <fail2ban> persist
+block in quick from <fail2ban>
+EOF
+}
+
+set_rc_startup_script() {
+    /bin/cat <<\EOF > /etc/rc.d/fail2ban
+#!/bin/sh
+
+daemon="/usr/local/bin/fail2ban-client"
+
+. /etc/rc.d/rc.subr
+
+rc_usercheck=NO
+
+rc_pre() {
+	if [ ! -f /var/log/fail2ban.log ]; then
+	    /usr/bin/touch /var/log/fail2ban.log
+        fi
+}
+
+rc_start() {
+	${rcexec} "${daemon} -x start"
+}
+
+rc_check() {
+	${daemon} status || return 1
+}
+
+rc_reload() {
+	${daemon} reload
+}
+
+rc_stop() {
+	${daemon} stop
+}
+
+rc_cmd $1
+EOF
+    /bin/chmod 555 /etc/rc.d/fail2ban
+}
+
+enable_rc_startup_script() {
+    /usr/sbin/rcctl enable fail2ban
+}
+
+do_pf_config_reload() {
+    /sbin/pfctl -nf /etc/pf.conf
+    local ret=$?
+    if [ ${ret} -ne 0 ]; then
+        exit 1
+    fi
+    
+    /sbin/pfctl -f /etc/pf.conf
+    /sbin/pfctl -sr
+    /usr/sbin/rcctl start fail2ban
+}
+    
+do_check_commands() {
+    local count=0
+    local check_commands="${cmd_git} ${cmd_python}"
+
+    /bin/echo -n "checking use commands: "
+    for cmd in ${check_commands}; do
+        if type ${cmd} > /dev/null 2>&1; then
+            /bin/echo -n "${cmd} "
+        else
+            eval local no_exist_commands${count}=\${cmd}
+            count=`/bin/expr ${count} + 1`
+        fi
+    done
+    
+    /bin/echo
+    if [ ${count} -ne 0 ]; then
+        /bin/echo -n "please check your installation: "
+        local i=0
+        while [ ${i} -ne ${count} ]; do
+            eval /bin/echo -n \"\${no_exist_commands${i}} \"
+            i=`/bin/expr ${i} + 1`
+        done
+        echo; exit 1
+    fi
+    /bin/echo "all command exists."
+} 
+
+
+main() {
+    local userid
+    /bin/echo "${DEF_PROGRAM_NAME} (Ver.${DEF_MAJOR_VER}.${DEF_MINOR_VER}.${DEF_REV})"
+    
+    userid=`id -u`
+    if [ ${userid} -ne 0 ]; then
+        echo "Operation is not permitted. run as root."
+        exit 1
+    fi
+        
+    local workdir=~/workdir/
+    if [ -d ${workdir} ]; then
+        cd ${workdir}
+    else
+        mkdir ${workdir}
+        cd ${workdir}
+    fi
+
+    do_check_commands
+    do_clone_f2b
+    do_install_f2b
+    set_f2b_config
+    set_pf_config
+    set_rc_startup_script
+    do_pf_config_reload
+    enable_rc_startup_script
+}
+
+# execute
+main
