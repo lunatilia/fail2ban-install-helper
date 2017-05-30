@@ -3,14 +3,14 @@
 # Script Name   : fail2ban-install-helper
 # Author        : Mitsuki Shirase
 # Created       : November 9th 2016
-# Last Modified : 
+# Last Modified : May 30th 2017
 # Description   : fail2ban install helper for OpenBSD 6.0
 ######################################################################## 
 
 readonly DEF_PROGRAM_NAME="fail2ban install helper for OpenBSD 6.0"
 readonly DEF_MAJOR_VER="0"
 readonly DEF_MINOR_VER="0"
-readonly DEF_REV="1"
+readonly DEF_REV="2"
 
 readonly cmd_git="/usr/local/bin/git"
 readonly cmd_python="/usr/local/bin/python2.7"
@@ -52,6 +52,7 @@ banaction = pf
 enabled  = true
 filter   = sshd
 action   = pf[name=SSH, port=22, protocol=tcp]
+##           sendmail-whois[name=SSH, dest=${yourmailaddress}, sender=${sendermailaddress}, sendername="Fail2Ban"]
 logpath  = /var/log/authlog
 maxretry = 3
 
@@ -62,6 +63,7 @@ enabled  = true
 filter   = recidive
 logpath  = /var/log/fail2ban.log
 action   = pf[name=recidive,protocol=all]
+##           sendmail-whois[name=SSH, dest=${yourmailaddress}, sender=${sendermailaddress}, sendername="Fail2Ban"]
 bantime  = 604800  ; 1 week
 findtime = 86300   ; 1 day
 maxretry = 3
@@ -70,11 +72,23 @@ EOF
 
 set_pf_config() {
     local pfconf=/etc/pf.conf
-    cp -p ${pfconf} ${pfconf}.bak
+    cp -p ${pfconf}{,.orig}
     /bin/cat <<\EOF >> /etc/pf.conf
 
 # include pf settings for fail2ban
+include "/etc/pf.conf.local"
 include "/etc/pf-f2b-sshd.conf"
+EOF
+
+    /bin/cat <<\EOF > /etc/pf.conf.local
+# pf settings for services
+# tcp_services args examples: ssh, http, https
+tcp_services = "{ ssh }"
+block in all
+pass in proto tcp from any to any port $tcp_services
+pass in quick inet proto icmp all
+pass in quick inet6 proto icmp6 all
+pass out all
 EOF
 
     /bin/cat <<\EOF > /etc/pf-f2b-sshd.conf
@@ -92,9 +106,8 @@ daemon="/usr/local/bin/fail2ban-client"
 
 . /etc/rc.d/rc.subr
 
-rc_usercheck=NO
-
 rc_pre() {
+	install -d -o root -m 0755 /var/run/fail2ban
 	if [ ! -f /var/log/fail2ban.log ]; then
 	    /usr/bin/touch /var/log/fail2ban.log
         fi
