@@ -3,17 +3,17 @@
 # Script Name   : fail2ban-install-helper
 # Author        : Mitsuki Shirase
 # Created       : November 9th 2016
-# Last Modified : May 30th 2017
+# Last Modified : Nov 30th 2019
 # Description   : fail2ban install helper for OpenBSD 6.0
 ######################################################################## 
 
-readonly DEF_PROGRAM_NAME="fail2ban install helper for OpenBSD 6.0"
+readonly DEF_PROGRAM_NAME="fail2ban install helper for OpenBSD 6.6"
 readonly DEF_MAJOR_VER="0"
 readonly DEF_MINOR_VER="0"
-readonly DEF_REV="2"
+readonly DEF_REV="3"
 
 readonly cmd_git="/usr/local/bin/git"
-readonly cmd_python="/usr/local/bin/python2.7"
+readonly cmd_python="/usr/local/bin/python3"
 readonly f2b_github="https://github.com/fail2ban/fail2ban.git"
 
 
