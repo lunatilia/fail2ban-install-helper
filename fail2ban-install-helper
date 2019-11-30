@@ -4,10 +4,10 @@
 # Author        : Mitsuki Shirase
 # Created       : November 9th 2016
 # Last Modified : Nov 30th 2019
-# Description   : fail2ban install helper for OpenBSD 6.0
+# Description   : fail2ban install helper for OpenBSD 6.x
 ######################################################################## 
 
-readonly DEF_PROGRAM_NAME="fail2ban install helper for OpenBSD 6.6"
+readonly DEF_PROGRAM_NAME="fail2ban install helper for OpenBSD 6.x"
 readonly DEF_MAJOR_VER="0"
 readonly DEF_MINOR_VER="0"
 readonly DEF_REV="3"
